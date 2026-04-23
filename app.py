@@ -74,7 +74,7 @@ else:
     if st.session_state.role == "faculty":
         menu = ["Submit Issue", "My Issues"]
     else:
-        menu = ["Submit Issue", "Dashboard"]
+        menu = ["Submit Issue", "Dashboard", "User Management"]
 
     choice = st.sidebar.selectbox("Navigation", menu)
 
@@ -122,7 +122,7 @@ else:
                 st.success("✅ Issue submitted successfully!")
 
     # =========================================================
-    # ------------------ DASHBOARD WITH FILTERS ----------------
+    # ------------------ DASHBOARD -----------------------------
     # =========================================================
     elif choice == "Dashboard":
 
@@ -131,7 +131,6 @@ else:
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
 
-            # SUMMARY
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Total", len(df))
             col2.metric("Pending", len(df[df["Status"] == "Pending"]))
@@ -140,7 +139,6 @@ else:
 
             st.markdown("---")
 
-            # FILTERS
             col1, col2, col3 = st.columns(3)
 
             with col1:
@@ -165,7 +163,6 @@ else:
 
             st.markdown("---")
 
-            # SORT
             priority_order = {"High": 0, "Medium": 1, "Low": 2}
             status_order = {"Pending": 0, "In Review": 1, "Resolved": 2}
 
@@ -178,7 +175,6 @@ else:
                 return {"Pending": "🔴", "In Review": "🟡", "Resolved": "🟢"}.get(status, "⚪")
 
             if not filtered_df.empty:
-
                 for i in filtered_df.index:
 
                     icon = get_icon(filtered_df.loc[i, "Status"])
@@ -190,10 +186,7 @@ else:
                     Urgency: **{filtered_df.loc[i, 'Urgency']}**
                     """)
 
-                    with st.expander("View Details & Update"):
-
-                        st.write(f"Description: {filtered_df.loc[i, 'Description']}")
-                        st.write(f"Submitted: {filtered_df.loc[i, 'Submission Date']}")
+                    with st.expander("Details & Update"):
 
                         status = st.selectbox(
                             "Update Status",
@@ -208,73 +201,92 @@ else:
                             key=f"r{i}"
                         )
 
-                        if st.button("💾 Save Update", key=f"b{i}"):
+                        if st.button("Save", key=f"b{i}"):
                             df.loc[i,"Status"] = status
                             df.loc[i,"Remarks"] = remarks
                             df.to_csv(FILE, index=False)
-                            st.success("✅ Updated successfully")
+                            st.success("Updated")
 
                     st.markdown("---")
 
             else:
-                st.info("No issues match selected filters.")
-
-        else:
-            st.info("No issues submitted yet.")
+                st.info("No issues match filters")
 
     # =========================================================
-    # ------------------ MY ISSUES (FACULTY EDIT) --------------
+    # ------------------ USER MANAGEMENT -----------------------
+    # =========================================================
+    elif choice == "User Management":
+
+        st.title("👥 User Management")
+
+        users_df = load_users()
+
+        for i in users_df.index:
+
+            st.markdown(f"### 👤 {users_df.loc[i, 'username']} ({users_df.loc[i, 'role']})")
+
+            with st.expander("Reset Password"):
+
+                new_password = st.text_input("New Password", type="password", key=f"pass{i}")
+
+                if st.button("Reset", key=f"reset{i}"):
+
+                    users_df.loc[i, "password"] = new_password
+                    users_df.to_csv(USER_FILE, index=False)
+                    st.success("Password updated")
+
+            st.markdown("---")
+
+        st.markdown("## ➕ Add New User")
+
+        new_user = st.text_input("Username")
+        new_pass = st.text_input("Password", type="password")
+        new_role = st.selectbox("Role", ["faculty", "admin"])
+
+        if st.button("Add User"):
+
+            new_row = pd.DataFrame([[new_user, new_pass, new_role]],
+                                   columns=["username","password","role"])
+
+            users_df = pd.concat([users_df, new_row], ignore_index=True)
+            users_df.to_csv(USER_FILE, index=False)
+
+            st.success("User added")
+
+    # =========================================================
+    # ------------------ MY ISSUES -----------------------------
     # =========================================================
     elif choice == "My Issues":
 
-        st.title("📌 My Submitted Issues")
+        st.title("📌 My Issues")
 
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
-
             user_df = df[df["Name"].str.lower() == st.session_state.username.lower()]
 
-            if not user_df.empty:
+            for i in user_df.index:
 
-                for i in user_df.index:
+                status = user_df.loc[i, "Status"]
 
-                    status = user_df.loc[i, "Status"]
+                st.markdown(f"### {user_df.loc[i, 'Issue Type']} ({status})")
 
-                    st.markdown(f"""
-                    ### {user_df.loc[i, 'Issue Type']} — {user_df.loc[i, 'Course']}
-                    **{user_df.loc[i, 'Day']} | {user_df.loc[i, 'Time Slot']}**
-                    Status: **{status}**
-                    """)
+                with st.expander("Edit"):
 
-                    with st.expander("View / Edit"):
+                    if status == "Pending":
 
-                        if status == "Pending":
+                        course = st.text_input("Course", value=user_df.loc[i,"Course"], key=f"c{i}")
+                        desc = st.text_area("Description", value=user_df.loc[i,"Description"], key=f"d{i}")
 
-                            course = st.text_input("Course", value=user_df.loc[i, "Course"], key=f"c{i}")
-                            semester = st.selectbox("Semester", ["1","2","3","4","5","6","7","8"],
-                                index=["1","2","3","4","5","6","7","8"].index(user_df.loc[i, "Semester"]), key=f"s{i}")
-                            description = st.text_area("Description", value=user_df.loc[i, "Description"], key=f"d{i}")
-                            urgency = st.selectbox("Urgency", ["Low","Medium","High"],
-                                index=["Low","Medium","High"].index(user_df.loc[i, "Urgency"]), key=f"u{i}")
+                        if st.button("Update", key=f"u{i}"):
 
-                            if st.button("✏️ Update Issue", key=f"btn{i}"):
+                            df.loc[i,"Course"] = course
+                            df.loc[i,"Description"] = desc
+                            df.to_csv(FILE, index=False)
 
-                                df.loc[i, "Course"] = course
-                                df.loc[i, "Semester"] = semester
-                                df.loc[i, "Description"] = description
-                                df.loc[i, "Urgency"] = urgency
+                            st.success("Updated")
 
-                                df.to_csv(FILE, index=False)
-                                st.success("✅ Issue updated!")
-
-                        else:
-                            st.write(user_df.loc[i])
-                            st.warning("🔒 Editing disabled (under review or resolved)")
-
-                    st.markdown("---")
-
-            else:
-                st.info("You have not submitted any issues yet.")
+                    else:
+                        st.warning("Editing locked")
 
         else:
-            st.info("No data available.")
+            st.info("No data")
