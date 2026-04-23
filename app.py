@@ -21,11 +21,21 @@ def validate_course_code(code):
 
 # ---------- GOOGLE DRIVE ---------- #
 def get_drive_service():
-    creds = service_account.Credentials.from_service_account_file(
-        "credentials.json",
-        scopes=["https://www.googleapis.com/auth/drive"]
-    )
+    try:
+        # Cloud (Streamlit Secrets)
+        creds = service_account.Credentials.from_service_account_info(
+            st.secrets["gdrive"],
+            scopes=["https://www.googleapis.com/auth/drive"]
+        )
+    except:
+        # Local fallback
+        creds = service_account.Credentials.from_service_account_file(
+            "credentials.json",
+            scopes=["https://www.googleapis.com/auth/drive"]
+        )
+
     return build("drive", "v3", credentials=creds)
+
 
 def upload_to_drive(uploaded_file):
     service = get_drive_service()
@@ -46,6 +56,7 @@ def upload_to_drive(uploaded_file):
 
     file_id = file.get("id")
 
+    # Make public
     service.permissions().create(
         fileId=file_id,
         body={"role": "reader", "type": "anyone"}
@@ -58,11 +69,6 @@ def load_users():
     if os.path.exists(USER_FILE):
         df = pd.read_csv(USER_FILE, dtype=str).fillna("")
         df.columns = df.columns.str.strip().str.lower()
-
-        for col in ["username", "password", "role"]:
-            if col not in df.columns:
-                df[col] = ""
-
         return df
     return pd.DataFrame(columns=["username","password","role"])
 
@@ -126,7 +132,7 @@ else:
 
             name = st.session_state.username.capitalize()
 
-            course_code = st.text_input("Course Code")
+            course_code = st.text_input("Course Code (e.g., 25FAP-123)")
             course_name = st.text_input("Course Name")
 
             semester = st.selectbox("Semester", ["1","2","3","4","5","6","7","8"])
@@ -154,7 +160,7 @@ else:
         if submit:
 
             if not validate_course_code(course_code):
-                st.error("Invalid Course Code (e.g., 25FAP-123)")
+                st.error("Invalid Course Code (Use: 25FAP-123)")
 
             else:
                 file_link = ""
@@ -179,7 +185,7 @@ else:
                 else:
                     new_data.to_csv(FILE, index=False)
 
-                st.success("Issue submitted")
+                st.success("✅ Issue submitted successfully!")
 
     # ========================= DASHBOARD =========================
     elif choice == "Dashboard":
@@ -214,21 +220,26 @@ else:
                     df.to_csv(FILE, index=False)
                     st.success("Updated")
 
-    # ========================= USERS =========================
+    # ========================= USER MANAGEMENT =========================
     elif choice == "User Management":
 
-        st.title("User Management")
+        st.title("👥 User Management")
 
         users_df = load_users()
 
         for i in users_df.index:
-            new_pass = st.text_input(f"{users_df.loc[i,'username']}", key=f"p{i}")
+            st.write(users_df.loc[i,"username"])
+
+            new_pass = st.text_input("New Password", key=f"p{i}")
 
             if st.button("Reset", key=f"r{i}"):
                 users_df.loc[i,"password"] = new_pass
                 users_df.to_csv(USER_FILE, index=False)
+                st.success("Password updated")
 
-        new_user = st.text_input("New User")
+        st.markdown("## Add User")
+
+        new_user = st.text_input("Username")
         new_pass = st.text_input("Password", type="password")
         role = st.selectbox("Role", ["faculty","admin"])
 
@@ -238,15 +249,16 @@ else:
                 columns=["username","password","role"])
             ])
             users_df.to_csv(USER_FILE, index=False)
+            st.success("User added")
 
     # ========================= MY ISSUES =========================
     elif choice == "My Issues":
 
-        st.title("My Issues")
+        st.title("📌 My Issues")
 
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
             df = df[df["Name"].str.lower() == st.session_state.username.lower()]
 
             for i in df.index:
-                st.write(df.loc[i,"Course Code"], "-", df.loc[i,"Status"])
+                st.write(f"{df.loc[i,'Course Code']} - {df.loc[i,'Status']}")
