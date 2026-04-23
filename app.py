@@ -14,8 +14,8 @@ import io
 FILE = "issues.csv"
 USER_FILE = "users.csv"
 
-# 👉 YOUR FOLDER ID
-FOLDER_ID = "1zMNyfonzqne5cGml4y2aS9ZUrKXjglLP"
+# ✅ YOUR NEW SHARED DRIVE FOLDER ID
+FOLDER_ID = "1XeCTIjGeUdi9lHHsN7ap_v193PHC4Bgw"
 
 # ---------- VALIDATION ----------
 def validate_course_code(code):
@@ -25,13 +25,11 @@ def validate_course_code(code):
 # ---------- GOOGLE DRIVE ----------
 def get_drive_service():
     try:
-        # Streamlit Cloud (Secrets)
         creds = service_account.Credentials.from_service_account_info(
             st.secrets["gdrive"],
             scopes=["https://www.googleapis.com/auth/drive"]
         )
     except:
-        # Local fallback
         creds = service_account.Credentials.from_service_account_file(
             "credentials.json",
             scopes=["https://www.googleapis.com/auth/drive"]
@@ -48,23 +46,30 @@ def upload_to_drive(uploaded_file):
         "parents": [FOLDER_ID]
     }
 
+    uploaded_file.seek(0)
     file_bytes = uploaded_file.read()
     media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=uploaded_file.type)
 
     try:
+        st.write("Uploading:", uploaded_file.name)
+
         file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields="id"
+            fields="id",
+            supportsAllDrives=True
         ).execute()
 
         file_id = file.get("id")
 
-        # Make file public
+        # Make public (optional)
         service.permissions().create(
             fileId=file_id,
-            body={"role": "reader", "type": "anyone"}
+            body={"role": "reader", "type": "anyone"},
+            supportsAllDrives=True
         ).execute()
+
+        st.success("Uploaded to Drive ✅")
 
         return f"https://drive.google.com/uc?id={file_id}"
 
@@ -131,12 +136,12 @@ else:
 
     choice = st.sidebar.selectbox("Navigation", menu)
 
-    # ================= SUBMIT ISSUE =================
+    # ================= SUBMIT =================
     if choice == "Submit Issue":
 
         st.title("📅 Submit Timetable Issue")
 
-        with st.form("issue_form"):
+        with st.form("form"):
 
             name = st.session_state.username.capitalize()
 
@@ -168,7 +173,7 @@ else:
         if submit:
 
             if not validate_course_code(course_code):
-                st.error("❌ Invalid Course Code (Use: 25FAP-123)")
+                st.error("❌ Invalid Course Code")
 
             else:
                 file_link = ""
@@ -203,72 +208,8 @@ else:
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
 
-            faculty = st.selectbox("Faculty", ["All"] + list(df["Name"].unique()))
-            status = st.selectbox("Status", ["All"] + list(df["Status"].unique()))
-
-            if faculty != "All":
-                df = df[df["Name"] == faculty]
-            if status != "All":
-                df = df[df["Status"] == status]
-
             for i in df.index:
-
                 st.markdown(f"### {df.loc[i,'Course Code']} ({df.loc[i,'Course Name']})")
 
                 if df.loc[i,"Image"]:
                     st.image(df.loc[i,"Image"], width=300)
-
-                new_status = st.selectbox(
-                    "Update Status",
-                    ["Pending","In Review","Resolved"],
-                    index=["Pending","In Review","Resolved"].index(df.loc[i,"Status"]),
-                    key=f"s{i}"
-                )
-
-                if st.button("Update", key=f"b{i}"):
-                    df.loc[i,"Status"] = new_status
-                    df.to_csv(FILE, index=False)
-                    st.success("Updated")
-
-    # ================= USER MANAGEMENT =================
-    elif choice == "User Management":
-
-        st.title("👥 User Management")
-
-        users_df = load_users()
-
-        for i in users_df.index:
-            st.write(f"{users_df.loc[i,'username']} ({users_df.loc[i,'role']})")
-
-            new_pass = st.text_input("New Password", key=f"p{i}")
-
-            if st.button("Reset", key=f"r{i}"):
-                users_df.loc[i,"password"] = new_pass
-                users_df.to_csv(USER_FILE, index=False)
-                st.success("Password updated")
-
-        st.markdown("## ➕ Add User")
-
-        new_user = st.text_input("Username")
-        new_pass = st.text_input("Password", type="password")
-        role = st.selectbox("Role", ["faculty","admin"])
-
-        if st.button("Add User"):
-            users_df = pd.concat([users_df,
-                pd.DataFrame([[new_user,new_pass,role]],
-                columns=["username","password","role"])
-            ])
-            users_df.to_csv(USER_FILE, index=False)
-            st.success("User added")
-
-    # ================= MY ISSUES =================
-    elif choice == "My Issues":
-
-        st.title("📌 My Issues")
-
-        if os.path.exists(FILE):
-            df = pd.read_csv(FILE, dtype=str).fillna("")
-            df = df[df["Name"].str.lower() == st.session_state.username.lower()]
-
-            for i in df.index:
-                st.write(f"{df.loc[i,'Course Code']} - {df.loc[i,'Status']}")
