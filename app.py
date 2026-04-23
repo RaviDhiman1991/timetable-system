@@ -14,8 +14,8 @@ import io
 FILE = "issues.csv"
 USER_FILE = "users.csv"
 
-# ✅ YOUR NEW SHARED DRIVE FOLDER ID
-FOLDER_ID = "1XeCTIjGeUdi9lHHsN7ap_v193PHC4Bgw"
+# ✅ UPDATED SHARED DRIVE FOLDER ID
+FOLDER_ID = "1uTIAmpkvbhdyipJSUBtQlTJWV2GygKmE"
 
 # ---------- VALIDATION ----------
 def validate_course_code(code):
@@ -62,7 +62,7 @@ def upload_to_drive(uploaded_file):
 
         file_id = file.get("id")
 
-        # Make public (optional)
+        # Make file public (optional)
         service.permissions().create(
             fileId=file_id,
             body={"role": "reader", "type": "anyone"},
