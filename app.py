@@ -8,6 +8,7 @@ from datetime import datetime
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2 import service_account
+from googleapiclient.errors import HttpError
 import io
 
 FILE = "issues.csv"
@@ -43,28 +44,33 @@ def upload_to_drive(uploaded_file):
     service = get_drive_service()
 
     file_metadata = {
-        "name": uploaded_file.name,
+        "name": uploaded_file.name.replace(" ", "_"),
         "parents": [FOLDER_ID]
     }
 
     file_bytes = uploaded_file.read()
     media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=uploaded_file.type)
 
-    file = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id"
-    ).execute()
+    try:
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id"
+        ).execute()
 
-    file_id = file.get("id")
+        file_id = file.get("id")
 
-    # Make file public
-    service.permissions().create(
-        fileId=file_id,
-        body={"role": "reader", "type": "anyone"}
-    ).execute()
+        # Make file public
+        service.permissions().create(
+            fileId=file_id,
+            body={"role": "reader", "type": "anyone"}
+        ).execute()
 
-    return f"https://drive.google.com/uc?id={file_id}"
+        return f"https://drive.google.com/uc?id={file_id}"
+
+    except HttpError as e:
+        st.error(f"❌ Drive Error: {e}")
+        return ""
 
 # ---------- USERS ----------
 def load_users():
