@@ -4,7 +4,7 @@ import os
 import re
 from datetime import datetime
 
-# --- Google Drive Imports ---
+# --- Google Drive ---
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2 import service_account
@@ -12,17 +12,19 @@ import io
 
 FILE = "issues.csv"
 USER_FILE = "users.csv"
-FOLDER_ID = "PASTE_YOUR_FOLDER_ID_HERE"  # <-- CHANGE THIS
 
-# ---------- VALIDATION ---------- #
+# 👉 YOUR FOLDER ID
+FOLDER_ID = "1zMNyfonzqne5cGml4y2aS9ZUrKXjglLP"
+
+# ---------- VALIDATION ----------
 def validate_course_code(code):
     pattern = r'^\d{2}FA[PTRNH]-\d{3}$'
     return re.match(pattern, code) is not None
 
-# ---------- GOOGLE DRIVE ---------- #
+# ---------- GOOGLE DRIVE ----------
 def get_drive_service():
     try:
-        # Cloud (Streamlit Secrets)
+        # Streamlit Cloud (Secrets)
         creds = service_account.Credentials.from_service_account_info(
             st.secrets["gdrive"],
             scopes=["https://www.googleapis.com/auth/drive"]
@@ -56,7 +58,7 @@ def upload_to_drive(uploaded_file):
 
     file_id = file.get("id")
 
-    # Make public
+    # Make file public
     service.permissions().create(
         fileId=file_id,
         body={"role": "reader", "type": "anyone"}
@@ -64,7 +66,7 @@ def upload_to_drive(uploaded_file):
 
     return f"https://drive.google.com/uc?id={file_id}"
 
-# ---------- LOAD USERS ---------- #
+# ---------- USERS ----------
 def load_users():
     if os.path.exists(USER_FILE):
         df = pd.read_csv(USER_FILE, dtype=str).fillna("")
@@ -72,13 +74,13 @@ def load_users():
         return df
     return pd.DataFrame(columns=["username","password","role"])
 
-# ---------- SESSION ---------- #
+# ---------- SESSION ----------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
 
-# ---------- LOGIN ---------- #
+# ---------- LOGIN ----------
 def login():
     st.title("🎨 Fine Arts Timetable Management System")
 
@@ -99,14 +101,14 @@ def login():
             st.session_state.role = user.iloc[0]["role"]
             st.rerun()
         else:
-            st.error("Invalid credentials")
+            st.error("❌ Invalid credentials")
 
-# ---------- LOGOUT ---------- #
+# ---------- LOGOUT ----------
 def logout():
     st.session_state.logged_in = False
     st.rerun()
 
-# ---------- MAIN ---------- #
+# ---------- MAIN ----------
 if not st.session_state.logged_in:
     login()
 
@@ -123,12 +125,12 @@ else:
 
     choice = st.sidebar.selectbox("Navigation", menu)
 
-    # ========================= SUBMIT =========================
+    # ================= SUBMIT ISSUE =================
     if choice == "Submit Issue":
 
         st.title("📅 Submit Timetable Issue")
 
-        with st.form("form"):
+        with st.form("issue_form"):
 
             name = st.session_state.username.capitalize()
 
@@ -160,7 +162,7 @@ else:
         if submit:
 
             if not validate_course_code(course_code):
-                st.error("Invalid Course Code (Use: 25FAP-123)")
+                st.error("❌ Invalid Course Code (Use: 25FAP-123)")
 
             else:
                 file_link = ""
@@ -187,7 +189,7 @@ else:
 
                 st.success("✅ Issue submitted successfully!")
 
-    # ========================= DASHBOARD =========================
+    # ================= DASHBOARD =================
     elif choice == "Dashboard":
 
         st.title("📊 Dashboard")
@@ -210,8 +212,10 @@ else:
                 if df.loc[i,"Image"]:
                     st.image(df.loc[i,"Image"], width=300)
 
-                new_status = st.selectbox("Update Status",
+                new_status = st.selectbox(
+                    "Update Status",
                     ["Pending","In Review","Resolved"],
+                    index=["Pending","In Review","Resolved"].index(df.loc[i,"Status"]),
                     key=f"s{i}"
                 )
 
@@ -220,7 +224,7 @@ else:
                     df.to_csv(FILE, index=False)
                     st.success("Updated")
 
-    # ========================= USER MANAGEMENT =========================
+    # ================= USER MANAGEMENT =================
     elif choice == "User Management":
 
         st.title("👥 User Management")
@@ -228,7 +232,7 @@ else:
         users_df = load_users()
 
         for i in users_df.index:
-            st.write(users_df.loc[i,"username"])
+            st.write(f"{users_df.loc[i,'username']} ({users_df.loc[i,'role']})")
 
             new_pass = st.text_input("New Password", key=f"p{i}")
 
@@ -237,13 +241,13 @@ else:
                 users_df.to_csv(USER_FILE, index=False)
                 st.success("Password updated")
 
-        st.markdown("## Add User")
+        st.markdown("## ➕ Add User")
 
         new_user = st.text_input("Username")
         new_pass = st.text_input("Password", type="password")
         role = st.selectbox("Role", ["faculty","admin"])
 
-        if st.button("Add"):
+        if st.button("Add User"):
             users_df = pd.concat([users_df,
                 pd.DataFrame([[new_user,new_pass,role]],
                 columns=["username","password","role"])
@@ -251,7 +255,7 @@ else:
             users_df.to_csv(USER_FILE, index=False)
             st.success("User added")
 
-    # ========================= MY ISSUES =========================
+    # ================= MY ISSUES =================
     elif choice == "My Issues":
 
         st.title("📌 My Issues")
