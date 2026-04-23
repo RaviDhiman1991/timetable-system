@@ -83,7 +83,7 @@ else:
     # =========================================================
     if choice == "Submit Issue":
 
-        st.title("📅 Timetable Issue System")
+        st.title("📅 Timetable Issue Report")
 
         with st.form("issue_form"):
             name = st.session_state.username.capitalize()
