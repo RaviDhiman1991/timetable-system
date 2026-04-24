@@ -4,7 +4,6 @@ import os
 import re
 from datetime import datetime
 import io
-import time
 
 # --- Google Drive ---
 from googleapiclient.discovery import build
@@ -15,7 +14,6 @@ from googleapiclient.errors import HttpError
 FILE = "issues.csv"
 USER_FILE = "users.csv"
 
-# ✅ SHARED DRIVE FOLDER ID
 FOLDER_ID = "1uTIAmpkvbhdyipJSUBtQlTJWV2GygKmE"
 
 # ---------- VALIDATION ----------
@@ -36,7 +34,6 @@ def get_drive_service():
             scopes=["https://www.googleapis.com/auth/drive"]
         )
     return build("drive", "v3", credentials=creds)
-
 
 def upload_to_drive(uploaded_file):
     service = get_drive_service()
@@ -71,7 +68,7 @@ def upload_to_drive(uploaded_file):
         st.error(f"❌ Drive Error: {e}")
         return ""
 
-# ---------- EXCEL EXPORT ----------
+# ---------- EXCEL ----------
 def convert_df_to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -93,6 +90,9 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
+
+if "submitted" not in st.session_state:
+    st.session_state.submitted = False
 
 # ---------- LOGIN ----------
 def login():
@@ -117,7 +117,6 @@ def login():
         else:
             st.error("❌ Invalid credentials")
 
-# ---------- LOGOUT ----------
 def logout():
     st.session_state.logged_in = False
     st.rerun()
@@ -135,7 +134,7 @@ else:
     if st.session_state.role == "faculty":
         menu = ["Submit Issue", "My Issues"]
     else:
-        menu = ["Submit Issue", "Dashboard", "User Management"]
+        menu = ["Submit Issue", "Dashboard"]
 
     choice = st.sidebar.selectbox("Navigation", menu)
 
@@ -144,25 +143,25 @@ else:
 
         st.title("📅 Submit Timetable Issue")
 
-        with st.form("form"):
+        # ✅ Show success AFTER rerun
+        if st.session_state.submitted:
+            st.success("✅ Issue submitted successfully!")
+            st.session_state.submitted = False
+
+        with st.form("issue_form", clear_on_submit=True):
 
             name = st.session_state.username.capitalize()
 
-            course_code = st.text_input("Course Code (e.g., 25FAP-123)")
+            course_code = st.text_input("Course Code")
             course_name = st.text_input("Course Name")
 
             semester = st.selectbox("Semester", ["1","2","3","4","5","6","7","8"])
             day = st.selectbox("Day", ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"])
 
             time_slot = st.selectbox("Time Slot", [
-                "9:30 – 10:20",
-                "10:20 – 11:10",
-                "11:10 – 12:00",
-                "12:00 – 12:50",
-                "12:50 – 1:50 (Break)",
-                "1:50 – 2:40",
-                "2:40 – 3:30",
-                "3:30 – 4:20"
+                "9:30 – 10:20","10:20 – 11:10","11:10 – 12:00",
+                "12:00 – 12:50","12:50 – 1:50 (Break)",
+                "1:50 – 2:40","2:40 – 3:30","3:30 – 4:20"
             ])
 
             issue_type = st.selectbox("Issue Type", ["Time Clash","Room Issue","Overload","Other"])
@@ -187,8 +186,7 @@ else:
                 new_data = pd.DataFrame([[
                     name, course_code, course_name, semester, day, time_slot,
                     issue_type, description, urgency,
-                    file_link,
-                    "Pending","",datetime.now()
+                    file_link, "Pending","",datetime.now()
                 ]],
                 columns=[
                     "Name","Course Code","Course Name","Semester","Day","Time Slot",
@@ -201,8 +199,7 @@ else:
                 else:
                     new_data.to_csv(FILE, index=False)
 
-                st.success("✅ Issue submitted successfully!")
-                time.sleep(1.5)
+                st.session_state.submitted = True
                 st.rerun()
 
     # ================= DASHBOARD =================
@@ -213,27 +210,14 @@ else:
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
 
-            faculty = st.selectbox("Faculty", ["All"] + list(df["Name"].unique()))
-            status = st.selectbox("Status", ["All"] + list(df["Status"].unique()))
-
-            if faculty != "All":
-                df = df[df["Name"] == faculty]
-            if status != "All":
-                df = df[df["Status"] == status]
-
-            # Excel Export
             excel_data = convert_df_to_excel(df)
-            filename = f"timetable_issues_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-
             st.download_button(
                 "📥 Download Excel Report",
                 data=excel_data,
-                file_name=filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name="timetable_issues.xlsx"
             )
 
             for i in df.index:
-                st.markdown(f"### {df.loc[i,'Course Code']} ({df.loc[i,'Course Name']})")
-
+                st.markdown(f"### {df.loc[i,'Course Code']}")
                 if df.loc[i,"Image"]:
                     st.image(df.loc[i,"Image"], width=300)
