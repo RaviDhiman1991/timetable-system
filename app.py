@@ -3,18 +3,18 @@ import pandas as pd
 import os
 import re
 from datetime import datetime
+import io
 
 # --- Google Drive ---
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2 import service_account
 from googleapiclient.errors import HttpError
-import io
 
 FILE = "issues.csv"
 USER_FILE = "users.csv"
 
-# ✅ UPDATED SHARED DRIVE FOLDER ID
+# ✅ SHARED DRIVE FOLDER ID
 FOLDER_ID = "1uTIAmpkvbhdyipJSUBtQlTJWV2GygKmE"
 
 # ---------- VALIDATION ----------
@@ -34,7 +34,6 @@ def get_drive_service():
             "credentials.json",
             scopes=["https://www.googleapis.com/auth/drive"]
         )
-
     return build("drive", "v3", credentials=creds)
 
 
@@ -47,12 +46,9 @@ def upload_to_drive(uploaded_file):
     }
 
     uploaded_file.seek(0)
-    file_bytes = uploaded_file.read()
-    media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=uploaded_file.type)
+    media = MediaIoBaseUpload(io.BytesIO(uploaded_file.read()), mimetype=uploaded_file.type)
 
     try:
-        st.write("Uploading:", uploaded_file.name)
-
         file = service.files().create(
             body=file_metadata,
             media_body=media,
@@ -62,20 +58,26 @@ def upload_to_drive(uploaded_file):
 
         file_id = file.get("id")
 
-        # Make file public (optional)
         service.permissions().create(
             fileId=file_id,
             body={"role": "reader", "type": "anyone"},
             supportsAllDrives=True
         ).execute()
 
-        st.success("Uploaded to Drive ✅")
-
         return f"https://drive.google.com/uc?id={file_id}"
 
     except HttpError as e:
         st.error(f"❌ Drive Error: {e}")
         return ""
+
+# ---------- EXCEL EXPORT ----------
+def convert_df_to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='All Issues')
+        df[df["Status"]=="Pending"].to_excel(writer, index=False, sheet_name='Pending')
+        df[df["Status"]=="Resolved"].to_excel(writer, index=False, sheet_name='Resolved')
+    return output.getvalue()
 
 # ---------- USERS ----------
 def load_users():
@@ -208,6 +210,27 @@ else:
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
 
+            # Filters
+            faculty = st.selectbox("Faculty", ["All"] + list(df["Name"].unique()))
+            status = st.selectbox("Status", ["All"] + list(df["Status"].unique()))
+
+            if faculty != "All":
+                df = df[df["Name"] == faculty]
+            if status != "All":
+                df = df[df["Status"] == status]
+
+            # Excel Download
+            excel_data = convert_df_to_excel(df)
+            filename = f"timetable_issues_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+            st.download_button(
+                "📥 Download Excel Report",
+                data=excel_data,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # Display
             for i in df.index:
                 st.markdown(f"### {df.loc[i,'Course Code']} ({df.loc[i,'Course Name']})")
 
