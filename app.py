@@ -141,11 +141,6 @@ else:
 
         st.title("📅 Submit Timetable Issue")
 
-        # Success message after rerun
-        if st.session_state.submitted:
-            st.success("✅ Issue submitted successfully!")
-            st.session_state.submitted = False
-
         with st.form("issue_form", clear_on_submit=False):
 
             name = st.session_state.username.capitalize()
@@ -173,10 +168,18 @@ else:
 
             submit = st.form_submit_button("Submit")
 
+        # ✅ Message placeholder (AFTER form)
+        message_placeholder = st.empty()
+
+        # Show success message near button
+        if st.session_state.submitted:
+            message_placeholder.success("✅ Issue submitted successfully!")
+            st.session_state.submitted = False
+
         if submit:
 
             if not validate_course_code(course_code):
-                st.error("❌ Invalid Course Code format")
+                message_placeholder.error("❌ Invalid Course Code format")
             
             else:
                 file_link = ""
