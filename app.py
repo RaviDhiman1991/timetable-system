@@ -11,14 +11,16 @@ from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2 import service_account
 from googleapiclient.errors import HttpError
 
+st.set_page_config(layout="centered")
+
 FILE = "issues.csv"
 USER_FILE = "users.csv"
-
 FOLDER_ID = "1uTIAmpkvbhdyipJSUBtQlTJWV2GygKmE"
 
 # ---------- VALIDATION ----------
 def validate_course_code(code):
-    pattern = r'^\d{2}FA[PTRNH]-\d{3}$'
+    code = code.strip().upper()
+    pattern = r'^(2[2-9]|30)[A-Z]{2}[PTRNH]-\d{3}$'
     return re.match(pattern, code) is not None
 
 # ---------- GOOGLE DRIVE ----------
@@ -103,7 +105,6 @@ def login():
 
     if st.button("Login"):
         users_df = load_users()
-
         user = users_df[
             (users_df["username"] == username) &
             (users_df["password"] == password)
@@ -126,16 +127,13 @@ if not st.session_state.logged_in:
     login()
 
 else:
+    st.sidebar.title("Menu")
     st.sidebar.write(f"👤 {st.session_state.username} ({st.session_state.role})")
 
     if st.sidebar.button("Logout"):
         logout()
 
-    if st.session_state.role == "faculty":
-        menu = ["Submit Issue", "My Issues"]
-    else:
-        menu = ["Submit Issue", "Dashboard"]
-
+    menu = ["Submit Issue", "Dashboard"]
     choice = st.sidebar.selectbox("Navigation", menu)
 
     # ================= SUBMIT =================
@@ -143,20 +141,26 @@ else:
 
         st.title("📅 Submit Timetable Issue")
 
-        # ✅ Show success AFTER rerun
+        # Success message after rerun
         if st.session_state.submitted:
             st.success("✅ Issue submitted successfully!")
             st.session_state.submitted = False
 
-        with st.form("issue_form", clear_on_submit=True):
+        with st.form("issue_form", clear_on_submit=False):
 
             name = st.session_state.username.capitalize()
 
-            course_code = st.text_input("Course Code")
-            course_name = st.text_input("Course Name")
+            col1, col2 = st.columns(2)
 
-            semester = st.selectbox("Semester", ["1","2","3","4","5","6","7","8"])
-            day = st.selectbox("Day", ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"])
+            with col1:
+                course_code = st.text_input("Course Code")
+                semester = st.selectbox("Semester", ["1","2","3","4","5","6","7","8"])
+                issue_type = st.selectbox("Issue Type", ["Time Clash","Room Issue","Overload","Other"])
+
+            with col2:
+                course_name = st.text_input("Course Name")
+                day = st.selectbox("Day", ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"])
+                urgency = st.selectbox("Urgency", ["Low","Medium","High"])
 
             time_slot = st.selectbox("Time Slot", [
                 "9:30 – 10:20","10:20 – 11:10","11:10 – 12:00",
@@ -164,10 +168,7 @@ else:
                 "1:50 – 2:40","2:40 – 3:30","3:30 – 4:20"
             ])
 
-            issue_type = st.selectbox("Issue Type", ["Time Clash","Room Issue","Overload","Other"])
             description = st.text_area("Description")
-            urgency = st.selectbox("Urgency", ["Low","Medium","High"])
-
             uploaded_file = st.file_uploader("Upload Screenshot", type=["png","jpg","jpeg"])
 
             submit = st.form_submit_button("Submit")
@@ -175,8 +176,8 @@ else:
         if submit:
 
             if not validate_course_code(course_code):
-                st.error("❌ Invalid Course Code")
-
+                st.error("❌ Invalid Course Code format")
+            
             else:
                 file_link = ""
 
@@ -184,7 +185,7 @@ else:
                     file_link = upload_to_drive(uploaded_file)
 
                 new_data = pd.DataFrame([[
-                    name, course_code, course_name, semester, day, time_slot,
+                    name, course_code.upper(), course_name, semester, day, time_slot,
                     issue_type, description, urgency,
                     file_link, "Pending","",datetime.now()
                 ]],
@@ -218,6 +219,9 @@ else:
             )
 
             for i in df.index:
-                st.markdown(f"### {df.loc[i,'Course Code']}")
-                if df.loc[i,"Image"]:
-                    st.image(df.loc[i,"Image"], width=300)
+                with st.container(border=True):
+                    st.markdown(f"### {df.loc[i,'Course Code']} ({df.loc[i,'Course Name']})")
+                    st.write(df.loc[i,"Description"])
+
+                    if df.loc[i,"Image"]:
+                        st.image(df.loc[i,"Image"], use_column_width=True)
