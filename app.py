@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime
 import io
+import time
 
 # --- Google Drive ---
 from googleapiclient.discovery import build
@@ -201,6 +202,8 @@ else:
                     new_data.to_csv(FILE, index=False)
 
                 st.success("✅ Issue submitted successfully!")
+                time.sleep(1.5)
+                st.rerun()
 
     # ================= DASHBOARD =================
     elif choice == "Dashboard":
@@ -210,7 +213,6 @@ else:
         if os.path.exists(FILE):
             df = pd.read_csv(FILE, dtype=str).fillna("")
 
-            # Filters
             faculty = st.selectbox("Faculty", ["All"] + list(df["Name"].unique()))
             status = st.selectbox("Status", ["All"] + list(df["Status"].unique()))
 
@@ -219,7 +221,7 @@ else:
             if status != "All":
                 df = df[df["Status"] == status]
 
-            # Excel Download
+            # Excel Export
             excel_data = convert_df_to_excel(df)
             filename = f"timetable_issues_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
 
@@ -230,7 +232,6 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # Display
             for i in df.index:
                 st.markdown(f"### {df.loc[i,'Course Code']} ({df.loc[i,'Course Name']})")
 
